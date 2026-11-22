@@ -1,32 +1,52 @@
+##***************************
+## Original author: Hasan Jasem
+## Assignment-2 edits by Yeshi Wangmo:
+##   1. Consistent species colours and theme across all figures
+##      (one species_colours vector, theme_classic() everywhere,
+##      geom_point() instead of a jitter that did not jitter,
+##      one + per line in ggplot code)
+##   2. Replaced aggregate() with tidyverse group_by()/summarise()
+##      (removes the 28 warnings from averaging text columns and
+##      keeps the two species separate)
+##   3. Cleaned up package loading and removed duplicate objects
+##      (install.packages commented out, extra library() calls removed,
+##      fct_drop() removed, df_tstmclean/df_telength replaced by
+##      combined_te/qry_width)
+##   Bonus. make_bubble_plot() function replaces two near-identical
+##      bubble plot blocks
+##***************************
+
 ###1 - OVERVIEW----
 
 #####Question----
-#H ow does the transposable element differ between Trichinella spiralis and Trichinella murrelli in terms of overall repeat abundance, major element class composition, and element length distribution?
+# How does the transposable element differ between Trichinella spiralis and Trichinella murrelli in terms of overall repeat abundance, major element class composition, and element length distribution?
 
 ####Data Access----
-# This code file should run on everyones system assuming they have downloaded the required packages and are in the latest software version. 
+# This code file should run on everyones system assuming they have downloaded the required packages and are in the latest software version.
 
 # Please make sure to download datasets from this NCBI link for T. Spirallis and T. Murrelli and save with the appropriate name and data/ directory:
-#T. Spirallis: https://www.ncbi.nlm.nih.gov/datasets/genome/GCA_001447595.1/ 
-#T. Murrelli: https://www.ncbi.nlm.nih.gov/datasets/genome/GCA_001447425.1/ 
+#T. Spirallis: https://www.ncbi.nlm.nih.gov/datasets/genome/GCA_001447595.1/
+#T. Murrelli: https://www.ncbi.nlm.nih.gov/datasets/genome/GCA_001447425.1/
 
-####Installation---- 
+####Installation----
 #Package installation & load libraries + Data exploration for both species (T. spiralis & T. murrelli)
 
-install.packages("tidyverse")
-install.packages("permute")
-install.packages("patchwork")
+# EDIT 3: run once if needed, not every time the script runs
+# install.packages("tidyverse")
+# install.packages("patchwork")
 
 rm(list = ls())
 
+# EDIT 3: tidyverse already loads ggplot2, dplyr and stringr
 library(tidyverse)
 conflicted::conflict_prefer("filter", "dplyr")
-library(ggplot2)
-library(dplyr)
-library(stringr)
 library(patchwork)
 
-###2 - DATA EXPLORATION---- 
+# EDIT 1: one colour per species, used by every figure
+species_colours <- c("T. spiralis" = "#2b8cbe",
+                     "T. murrelli" = "#e6550d")
+
+###2 - DATA EXPLORATION----
 
 # Data wrangling. We will add a species label to each dataset and then combine them into one master table.
 
@@ -38,7 +58,7 @@ spiralis_raw <- read_csv("../data/trichinella_spiralis_te.csv")
 # check class
 class(spiralis_raw)
 
-# see variables 
+# see variables
 names(spiralis_raw)
 
 # see summary
@@ -53,7 +73,7 @@ murrelli_raw <- read_csv("../data/trichinella murrelli_te.csv")
 # check class
 class(murrelli_raw)
 
-# see variables 
+# see variables
 names(murrelli_raw)
 
 # see summary
@@ -62,7 +82,7 @@ summary(murrelli_raw)
 # check dimensions
 dim(murrelli_raw)
 
-###3 - DATA CLEANING---- 
+###3 - DATA CLEANING----
 #####Combination----
 
 spiralis_clean <- spiralis_raw |>
@@ -76,7 +96,7 @@ murrelli_clean <- murrelli_raw |>
 df_tstm <- bind_rows(spiralis_clean, murrelli_clean)
 
 ####Broad Classification----
-# Group detailed repeat annotations into broad, interpretable classes using str_detect() from stingr.
+# Group detailed repeat annotations into broad, interpretable classes using str_detect() from stringr.
 
 unique(df_tstm$matching_class)
 
@@ -103,17 +123,14 @@ unique(df_tstm$broad_class)
 
 # Filter out non-TEs (decided to keep satellites as a good non transposable element comparison cohort for discussion)
 
+# EDIT 3: removed fct_drop() (broad_class is a character, so it did nothing)
 combined_te <- df_tstm |>
   filter(!broad_class %in% c("Simple Repeat", "Low Complexity", "Other/Unknown")) |>
-  mutate(broad_class = fct_drop(broad_class)) |>
+  # order classes from most to least common so Figure 2 bars are sorted
   mutate(broad_class = fct_infreq(broad_class))
 
-df_tstmclean <- combined_te |>
-  mutate(df_telength = qry_end - qry_start +1)
-
-df_tstmclean |>
-  select(qry_start, qry_end, df_telength) |>
-  head()
+# EDIT 3: removed df_tstmclean / df_telength (identical to qry_width)
+# and the head() preview; qry_width is used throughout instead
 
 ###4 - SUMMARY STATS----
 
@@ -153,13 +170,16 @@ print(te_class_summary)
 ####QrylengthXspecies----
 #figure 1: Element Length Distribution (EDA / Quality Check)
 
-fig1 <- ggplot(combined_te, aes(x = species, y = qry_width, fill = species)) + geom_boxplot(outlier.alpha = 0.15) +
-  scale_y_log10() + 
-  scale_fill_manual(values = c("T. spiralis" = "#2b8cbe", "T. murrelli" = "#e6550d")) + labs(
+# EDIT 1: shared colours, one + per line
+fig1 <- ggplot(combined_te, aes(x = species, y = qry_width, fill = species)) +
+  geom_boxplot(outlier.alpha = 0.15) +
+  scale_y_log10() +
+  scale_fill_manual(values = species_colours) +
+  labs(
     title = "Comparison of Transposable Element Lengths",
     x = "Species",
     y = "TE Length in bp (log10 scale)"
-  ) + 
+  ) +
   theme_classic() +
   theme(legend.position = "none")
 
@@ -170,12 +190,16 @@ ggsave("../output/figure1_length_distribution.png", plot = fig1, width = 6, heig
 ####Class composition----
 #figure 2: Major Repeat Class Composition (Main Comparative Result)
 
-fig2 <- ggplot(te_class_summary, aes(x = broad_class, y = percentage, fill = species)) + geom_col(position = position_dodge(width = 0.8), width = 0.7) + scale_fill_manual(values = c("T. spiralis" = "#2b8cbe", "T. murrelli" = "#e6550d")) + labs(
-  title = "Proportion of Transposable Element Classes",
-  x = "Transposable Element Class",
-  y = "Percentage of Total TEs (%)",
-  fill = "Species"
-) +
+# EDIT 1: shared colours, one + per line
+fig2 <- ggplot(te_class_summary, aes(x = broad_class, y = percentage, fill = species)) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+  scale_fill_manual(values = species_colours) +
+  labs(
+    title = "Proportion of Transposable Element Classes",
+    x = "Transposable Element Class",
+    y = "Percentage of Total TEs (%)",
+    fill = "Species"
+  ) +
   theme_classic() +
   theme(
     axis.text.x = element_text(angle = 30, hjust = 1),
@@ -198,17 +222,18 @@ contig_te_counts <- combined_te |>
 wilcox_te_res <- wilcox.test(n ~ species, data = contig_te_counts)
 p_val_label <- paste0("Wilcoxon rank-sum p = ", format.pval(wilcox_te_res$p.value, digits = 3))
 
+# EDIT 1: shared colours
 fig3 <- ggplot(contig_te_counts, aes(x = species, y = n, fill = species)) +
   geom_boxplot(alpha = 0.7, outlier.alpha = 0.2) +
   scale_y_log10() +
-  scale_fill_manual(values = c("T. spiralis" = "#2b8cbe", "T. murrelli" = "#e6550d")) +
+  scale_fill_manual(values = species_colours) +
   annotate("text", x = 1.5, y = max(contig_te_counts$n) * 0.8, label = p_val_label, fontface = "italic") +
   labs(
     title = "Transposable Element Density per Contig",
     subtitle = "Comparing spatial TE clustering across assembly contigs",
     x = "Species",
     y = "Number of TEs per Contig (log10 scale)"
-  ) + 
+  ) +
   theme_classic() +
   theme(legend.position = "none")
 
@@ -220,11 +245,21 @@ print(wilcox_te_res)
 
 ###
 
-df_percdiv <- aggregate(x = df_tstmclean, by = list(MatchClass = df_tstmclean$broad_class), FUN = function(x) mean(x, na.rm = TRUE))
-summary(df_percdiv)
+# EDIT 2: replaced aggregate() (which averaged every column, including text
+# columns, causing 28 warnings, and mixed both species) with tidyverse code
+## mean divergence, length and Smith-Waterman score for each species and TE class
+df_percdiv <- combined_te |>
+  group_by(species, broad_class) |>
+  summarise(n_te = n(),
+            mean_perc_div = mean(perc_div, na.rm = TRUE),
+            mean_length_bp = mean(qry_width),
+            mean_sw_score = mean(sw_score, na.rm = TRUE),
+            .groups = "drop")
+
+df_percdiv
 
 ####Divergence----
-# consider comparing and confirming the evolutionary relationship between the two: At a rate of approximately 5% divergence from consensus (Kimura divergence). Under 5% is considered very low divergence. This will address question into which of the two species is more closely resembling the family consensus. Investigation into divergence will shed light into how alike they are (percentage conservation from the same ancestor/reference), whereas lowest divergence will allow for higher resolution into where the divergence starts to occur. 
+# consider comparing and confirming the evolutionary relationship between the two: At a rate of approximately 5% divergence from consensus (Kimura divergence). Under 5% is considered very low divergence. This will address question into which of the two species is more closely resembling the family consensus. Investigation into divergence will shed light into how alike they are (percentage conservation from the same ancestor/reference), whereas lowest divergence will allow for higher resolution into where the divergence starts to occur.
 
 dfOverDiv <- combined_te |>
   filter(!is.na(matching_class)) |>
@@ -241,70 +276,62 @@ dfUnderDiv <- combined_te |>
   filter(!is.na(matching_class)) |>
   filter(perc_div <= 5) |>
   group_by(species, matching_class) |>
-  summarize(avgPD = mean(perc_div, na.rm = TRUE)) |> ungroup() |>
+  summarize(avgPD = mean(perc_div, na.rm = TRUE)) |>
+  ungroup() |>
   arrange(avgPD) |>
   print()
 
 #####Jitter Plot / Test----
 
+# EDIT 1: geom_point() instead of geom_jitter(width = 0, height = 0),
+# which did not jitter anything; shared colours and theme
 ggplot(dfOverDiv, aes(x = avgPD, y = matching_class)) +
-  geom_jitter(aes(color = species), width = 0., height = 0, alpha = 0.7, size = 3) +
-  scale_color_manual(values = c("T. spiralis" = "blue", "T. murrelli" = "red")) +
+  geom_point(aes(color = species), alpha = 0.7, size = 3) +
+  scale_color_manual(values = species_colours) +
   labs(
     x = "Average Divergence",
     y = "Repeat Class",
     color = "Species"
   ) +
-  theme_minimal()
+  theme_classic()
 
 # did not enjoy the visualization (sparse + no real direction)
 
 #####Dumbbell Plots----
-# attempting dumbbell for better presentation 
+# attempting dumbbell for better presentation
 
-spec_colors <- c(
-  "T. spiralis" = "green", 
-  "T. murrelli" = "darkgreen"
-)
-
-ggAvgDiv <- ggplot(dfOverDiv, aes(x = avgPD,y = matching_class, color = species)) +
+# EDIT 1: removed spec_colors (green/darkgreen); uses species_colours,
+# grey connecting line, and theme_classic() like the other figures
+ggAvgDiv <- ggplot(dfOverDiv, aes(x = avgPD, y = matching_class, color = species)) +
   geom_line(
     aes(group = matching_class),
-    color = "green",
+    color = "grey60",
     linewidth = 0.8) +
   geom_point(size = 3) +
-  scale_color_manual(values = spec_colors) +
+  scale_color_manual(values = species_colours) +
   labs(
-    x = "Average Percent Divergence (%)", 
-    y = "Repeat Class", 
+    x = "Average Percent Divergence (%)",
+    y = "Repeat Class",
     color = "Species"
-  ) + 
-  theme_minimal() +
+  ) +
+  theme_classic() +
   labs(title = "Most Diverged Classes\nT.spiralis vs. T. murelli (Averaged)")
 
 ggAvgDiv
-# ggsave(
-#   filename = "../output/AvgDiv.png",
-#   plot = ggAvgDiv,
-#   width = 8,
-#   height = 8,
-#   units = "in",
-#   dpi = 300
-# )
 
-ggAvgCons <- ggplot(dfUnderDiv, aes(x = avgPD,y = matching_class, color = species)) +
+ggAvgCons <- ggplot(dfUnderDiv, aes(x = avgPD, y = matching_class, color = species)) +
   geom_line(
     aes(group = matching_class),
-    color = "green",
+    color = "grey60",
     linewidth = 0.8) +
   geom_point(size = 3) +
-  scale_color_manual(values = spec_colors) +
+  scale_color_manual(values = species_colours) +
   labs(
-    x = "Average Percent Divergence (%)", 
-    y = "Repeat Class", 
+    x = "Average Percent Divergence (%)",
+    y = "Repeat Class",
     color = "Species"
-  ) + 
-  theme_minimal() +
+  ) +
+  theme_classic() +
   labs(title = "Most Highly Conserved Classes\nT.spiralis vs. T. murelli (Averaged)")
 ggAvgCons
 
@@ -337,26 +364,29 @@ dfUnderDiv2 <- combined_te |>
   arrange(desc(perc_div)) |>
   print()
 
+# EDIT 1: added shared species colours; theme_classic()
 ggDiv <- ggplot() +
   geom_boxplot(data = dfOverDiv2, aes(x = matching_class, y = perc_div, color = species)) +
+  scale_color_manual(values = species_colours) +
   labs(
     title = "Repeat Divergence by class\n in T. spiralis vs. T.murelli",
     x = "Repeat Class",
-    y = "Divergence (%)", 
+    y = "Divergence (%)",
     color = "Species"
   ) +
-  theme_minimal() +
+  theme_classic() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 ggCons <- ggplot() +
   geom_boxplot(data = dfUnderDiv2, aes(x = matching_class, y = perc_div, color = species)) +
+  scale_color_manual(values = species_colours) +
   labs(
     title = "Repeat Conservation by class\n in T. spiralis vs. T.murelli",
     x = "Repeat Class",
-    y = "Divergence (%)", 
+    y = "Divergence (%)",
     color = "Species"
   ) +
-  theme_minimal() +
+  theme_classic() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 Divergence_plot <- ggDiv + ggCons +
@@ -373,59 +403,30 @@ ggsave(
 )
 
 #####Multi-Variable Bubble Plots----
-# what if we look at sequence length x percent convergence? 
+# what if we look at sequence length x percent convergence?
 
-mv_combined <- ggplot(data = df_tstmclean, aes(x = perc_div, y  = df_telength, size = sw_score, fill = broad_class, shape = species)) +
-  geom_point(alpha=0.5, color = "black") +
-  scale_shape_manual(values = c(
-    "T. spiralis" = 21,
-    "T. murrelli" = 24)) +
-  
-  guides(
-    fill = guide_legend(
-      override.aes = list(
-        shape = 21, 
-        color = "black", 
-        alpha = 1
-      )
-    )
-  ) +
-  labs(
-    fill = "Repeat Class",
-    shape = "Species",
-    size = "SW_score") +
-  labs(
-    title = "Multivariable Comparison between\n T. spiralis vs. T.murelli",
-    x = "Percent Divergence (%)",
-    y = "Sequence Length (bp)",
-  ) +
-  theme_minimal()
+# EDIT3: one function makes both bubble plots (replaces two
+# near-identical ~25-line blocks); uses combined_te and qry_width (Edit 3)
+make_bubble_plot <- function(plot_data, plot_title) {
+  ggplot(plot_data, aes(x = perc_div, y = qry_width, size = sw_score,
+                        fill = broad_class, shape = species)) +
+    geom_point(alpha = 0.5, color = "black") +
+    scale_shape_manual(values = c("T. spiralis" = 21, "T. murrelli" = 24)) +
+    guides(fill = guide_legend(override.aes = list(shape = 21, color = "black", alpha = 1))) +
+    labs(title = plot_title,
+         x = "Percent Divergence (%)",
+         y = "Sequence Length (bp)",
+         fill = "Repeat Class",
+         shape = "Species",
+         size = "SW score") +
+    theme_classic()
+}
 
-mv_edited <- ggplot(data = subset(df_tstmclean, broad_class != "LTR Retrotransposon"), aes(x = perc_div, y  = df_telength, size = sw_score, fill = broad_class, shape = species)) +
-  geom_point(alpha=0.5, color = "black") +
-  scale_shape_manual(values = c(
-    "T. spiralis" = 21,
-    "T. murrelli" = 24)) +
-  
-  guides(
-    fill = guide_legend(
-      override.aes = list(
-        shape = 21, 
-        color = "black", 
-        alpha = 1
-      )
-    )
-  ) +
-  labs(
-    fill = "Repeat Class",
-    shape = "Species",
-    size = "SW_score") +
-  labs(
-    title = "Multivariable Comparison between\n T. spiralis vs. T.murelli (without LTR)",
-    x = "Percent Divergence (%)",
-    y = "Sequence Length (bp)",
-  ) +
-  theme_minimal()
+mv_combined <- make_bubble_plot(combined_te,
+  "Multivariable Comparison between\n T. spiralis vs. T. murrelli")
+
+mv_edited <- make_bubble_plot(subset(combined_te, broad_class != "LTR Retrotransposon"),
+  "Multivariable Comparison between\n T. spiralis vs. T. murrelli (without LTR)")
 
 Bubble_plot <- mv_combined + mv_edited +
   plot_layout(ncol = 2)
